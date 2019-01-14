@@ -54,7 +54,7 @@ class Spreadsheet(object):
         worksheet = workbook.add_worksheet()
         worksheet.set_default_row(25)  # the default value height of row
         worksheet.set_margins(0.2, 0, 0, 0)  # page margin
-        worksheet.set_print_scale(52)  # 缩放比例
+        worksheet.set_print_scale(52)  # 缩放比例 scale
         worksheet.set_landscape()  # set the orientation of a worksheet’s printed page to landscape
         worksheet.set_paper(9)  # A4
 
