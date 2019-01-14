@@ -2,4 +2,4 @@
 my demos
 ## tools
 ### libs：
-- docstools use reportlab 、xlsxWriter
+- docstools use reportlab， xlsxWriter
