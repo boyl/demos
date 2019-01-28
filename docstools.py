@@ -13,6 +13,11 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak, Table
 
+from mysite.iclock.models import LEAVE_UNITS, LeaveClass
+
+
+LEAVE_UNIT_MAP = {k: v for k, v in LEAVE_UNITS}
+
 
 class Spreadsheet(object):
     merge_format = dict(bold=1, align='center', valign='vcenter')
@@ -53,8 +58,8 @@ class Spreadsheet(object):
         workbook = xlsxwriter.Workbook(output, options={'in_memory': True})  # options={'in_memory': True}
         worksheet = workbook.add_worksheet()
         worksheet.set_default_row(25)  # the default value height of row
-        worksheet.set_margins(0.2, 0, 0, 0)  # page margin
-        worksheet.set_print_scale(52)  # 缩放比例 scale
+        worksheet.set_margins(0.3, 0, 0, 0)  # page margin
+        worksheet.set_print_scale(52)  # 缩放比例
         worksheet.set_landscape()  # set the orientation of a worksheet’s printed page to landscape
         worksheet.set_paper(9)  # A4
 
@@ -81,7 +86,9 @@ class Spreadsheet(object):
 
     def _write_data(self, worksheet, data):
         length = len(data)
-        border = [((i + 1) * 9, (i + 2) * 9, (i + 3) * 9) for i in range(0, length, 3)]
+        cons = 9
+        d_v = 2
+        border = [((i + 1) * cons, (i + 2) * cons, (i + 3) * cons) for i in range(0, length, 3)]
         group_by3_list = (data[i: i + 3] for i in xrange(0, length, 3))  # 三个一组 步长3切片
 
         i, j = 0, 0
@@ -90,40 +97,53 @@ class Spreadsheet(object):
                 col = border[i][j]
 
                 header = u'{0}年{1}月份考勤明细表'.format(self._year, self._month)
-                worksheet.merge_range(0, col - 9, 0, col - 2, header, self._merge_format)  # write the head data
+                worksheet.merge_range(0, col - cons, 0, col - d_v, header, self._merge_format)  # write the head data
 
                 info_field = ['emp_name', 'dept_name', 'group_name', 'emp_pin']
                 user_info_str = self._info(info_field, data_dict)
-                worksheet.merge_range(1, col - 9, 1, col - 2, user_info_str, self._merge_format)  # write the info head
+                # write the info head
+                worksheet.merge_range(1, col - cons, 1, col - d_v, user_info_str, self._merge_format)
 
-                self._write_common(worksheet, col - 9)  # write the common data
+                self._write_common(worksheet, col - cons)  # write the common data
 
-                self._write_common(worksheet, col - 9, row=3, att_flag=True,
+                self._write_common(worksheet, col - cons, row=3, att_flag=True,
                                    data=data_dict['data'])  # write the att data
 
                 the_length = len(data_dict['data'])
-                self._merge_body(worksheet, 3 + the_length, col - 9, data_dict)  # write the body data
+                self._merge_body(worksheet, 3 + the_length, col - cons, data_dict)  # write the body data
 
-                foot = '  '.join([u'审核: ', u'制表: {}'.format(self.lister), u'员工确认:  '])
+                lister = u'制表: {}'.format(self.lister)
                 # write the foot
-                worksheet.merge_range(11 + the_length, col - 9, 11 + the_length, col - 2, foot, self._top_border)
+                new_length = 3 + the_length + int(math.ceil(len(self.statistics) / 2.0))
+                worksheet.write(new_length, col - cons, u'审核: ', self._top_border)
+                worksheet.merge_range(new_length, col - 4, new_length, col - 2, u'员工确认: ', self._top_border)
+                worksheet.merge_range(new_length, col - 8, new_length, col - 7, None, self._top_border)
+                worksheet.merge_range(new_length, col - 6, new_length, col - 5, lister, self._top_border)
 
                 j += 1
 
-            worksheet.set_v_pagebreaks([col])  # 设置垂直分页符
+            worksheet.set_v_pagebreaks([col-1, col])  # 设置垂直分页符
             i += 1
             j = 0
 
     def _merge_body(self, worksheet, row, col, data):
         field_by2_list = (self.statistics[i: i + 2] for i in range(0, len(self.statistics), 2))
+
+        leave_name_list = [self.field_value_map[name] for name in self.statistics if name.startswith('Leave_')]
+        name_unit = LeaveClass.objects.filter(LeaveName__in=leave_name_list).values_list("LeaveName", "Unit")
+        name_unit_map = {k: LEAVE_UNIT_MAP[v] for k, v in name_unit}
         format_o = u'{0}: {1}  '
-        format_d = u'{0}: {1}  天'
+        format_d = u'{0}: {1}  {2}'
 
         r, c = row, col
         for field_list in field_by2_list:
             for field in field_list:
-                val = (format_d if field.startswith('Leave_') else format_o).format(self.field_value_map[field],
-                                                                                    data[field])
+                if field.startswith('Leave_'):
+                    val = format_d.format(self.field_value_map[field], data[field],
+                                          name_unit_map[self.field_value_map[field]])
+                else:
+                    val = format_o.format(self.field_value_map[field], data[field])
+
                 border = self._right_border if c % 3 else self._left_border
                 worksheet.merge_range(r, c, r, c + 3, val, border)
 
@@ -147,7 +167,7 @@ class Spreadsheet(object):
                                     self._date_format if f == 'att_date' else self._normal_cell_format)
                     col += 1
                 row += 1
-        worksheet.set_column(row, col_start_num, 10)
+        worksheet.set_column(row, col_start_num, 9.76)
 
     def _info(self, info_field_list, data):
         _info_list = list()
